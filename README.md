@@ -1,5 +1,3 @@
-# sap-mcp-server
-Node.js MCP server deployed to SAP BTP Cloud Foundry
 # SAP MCP Server
 
 A hands-on Model Context Protocol (MCP) server built with Node.js as part of an SAP BTP integration project.
