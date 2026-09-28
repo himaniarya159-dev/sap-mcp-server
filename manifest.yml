@@ -1,0 +1,8 @@
+applications:
+  - name: sap-mcp-server
+    memory: 256M
+    buildpacks:
+      - nodejs_buildpack
+    command: npm start
+    env:
+      NODE_ENV: production
