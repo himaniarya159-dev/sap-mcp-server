@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "sap-mcp-local": {
+      "type": "streamableHttp",
+      "url": "http://localhost:3000/mcp",
+      "disabled": false,
+      "autoApprove": []
+    },
+    "sap-mcp-apim": {
+      "type": "streamableHttp",
+      "url": "https://<apim-host>/<org>/sap-mcp",
+      "headers": {
+        "X-API-Key": "<api key from Developer Hub>",
+        "Authorization": "Bearer <XSUAA access token>"
+      },
+      "disabled": true,
+      "autoApprove": []
+    }
+  }
+}
