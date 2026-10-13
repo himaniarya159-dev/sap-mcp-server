@@ -15,7 +15,7 @@ Node.js MCP Server (BTP Cloud Foundry, Streamable HTTP)
 Tools: get_customer, find_customers, get_order_updates, list_orders
 ```
 
-📖 Blog post: _<add your SAP Community blog link here>_
+📖 Blog post: _<(https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/mcp-and-sap-integration-connecting-ai-agents-with-enterprise-apis/ba-p/14471218?emcs_t=S2h8ZW1haWx8dG9waWNfc3Vic2NyaXB0aW9ufE1WNFUzMFJJMjc1UlY4fDE0NDcxMjE4fFNVQlNDUklQVElPTlN8aEs)>_
 
 ---
 

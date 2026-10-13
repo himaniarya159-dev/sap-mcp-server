@@ -5,7 +5,7 @@ applications:
       - nodejs_buildpack
     command: npm start
     routes:
-      - route: sap-mcp-demo.cfapps.us10-001.hana.ondemand.com
+      - route: sap-mcp-sj.cfapps.us10-001.hana.ondemand.com
     health-check-type: http
     health-check-http-endpoint: /health
     env:
