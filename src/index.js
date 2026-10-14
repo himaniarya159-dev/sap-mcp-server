@@ -2,12 +2,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import http from "node:http";
+import { s4Tools } from "./s4-tools.js";
  
 console.log("INDEX.JS STARTED (customers + sales orders)");
  
 // ============================================================
 // SAMPLE DATA: customers and their sales orders
-// (later: replace with SAP S/4HANA Business Partner / Sales Order APIs)
+// Used when DATA_SOURCE is not "s4" (for example when running locally).
+// The live SAP S/4HANA version of the same tools is in s4-tools.js.
 // ============================================================
 const customers = {
   "1001": { customerId: "1001", name: "ABC Manufacturing",   country: "Canada",        city: "Calgary" },
@@ -92,7 +94,7 @@ const orders = {
 };
  
 // ============================================================
-// BUSINESS LOGIC
+// BUSINESS LOGIC (sample data)
 // ============================================================
 function orderSummary(o) {
   return { orderId: o.orderId, orderDate: o.orderDate, status: o.status,
@@ -128,9 +130,9 @@ function listOrders(customerId, status) {
 }
  
 // ============================================================
-// TOOL REGISTRY: each tool defined once, registered on the MCP server below
+// TOOL REGISTRY (sample data): each tool defined once, registered on the MCP server below
 // ============================================================
-const tools = [
+const sampleTools = [
   {
     name: "get_customer",
     description: "Get a customer by customer ID, including a summary of all of the customer's sales orders.",
@@ -167,21 +169,56 @@ const tools = [
 ];
  
 // ============================================================
+// DATA SOURCE: DATA_SOURCE=s4 -> live SAP S/4HANA via BTP destination,
+// otherwise the sample data above. Tool names stay the same either way.
+// ============================================================
+const useS4 = process.env.DATA_SOURCE === "s4";
+const tools = useS4 ? s4Tools : sampleTools;
+console.log(`Data source: ${useS4 ? "SAP S/4HANA (BTP destination)" : "sample data"}`);
+ 
+// ============================================================
 // MCP SERVER
 // ============================================================
+function toolErrorBody(e) {
+  const status = e?.response?.status ?? e?.cause?.response?.status;
+  if (status === 404) {
+    return { error: "NOT_FOUND", retryable: false, message: "This record does not exist in SAP S/4HANA." };
+  }
+  if (!status && /destination/i.test(e?.message || "")) {
+    return { error: "CONFIGURATION_ERROR", retryable: false,
+             message: "The SAP S/4HANA connection is not configured (BTP destination not found)." };
+  }
+  // Only real transient problems are worth a retry: throttling, server errors, network glitches
+  const code = e?.code ?? e?.cause?.code;
+  const networkGlitch = ["ECONNRESET", "ETIMEDOUT", "ECONNABORTED", "EAI_AGAIN", "ECONNREFUSED"].includes(code);
+  if (status === 429 || status >= 500 || networkGlitch) {
+    return { error: "TEMPORARY_ERROR", retryable: true,
+             message: `SAP S/4HANA is temporarily unavailable${status ? ` (HTTP ${status})` : ""}. Try again shortly.` };
+  }
+  // Everything else (400, 401, 403, bugs in our own request) will fail again the same way
+  return { error: "REQUEST_ERROR", retryable: false,
+           message: `The SAP S/4HANA request could not be processed${status ? ` (HTTP ${status})` : ""}.` };
+}
+ 
 function createMcpServer() {
-  const server = new McpServer({ name: "sap-mcp-demo", version: "1.2.0" });
+  const server = new McpServer({ name: "sap-mcp-demo", version: "1.3.0" });
  
   for (const tool of tools) {
     server.registerTool(
       tool.name,
       { description: tool.description, inputSchema: tool.inputSchema },
       async args => {
-        const result = tool.run(args);
-        return {
-          isError: Boolean(result && result.error),
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
-        };
+        try {
+          const result = await tool.run(args);
+          return {
+            isError: Boolean(result && result.error),
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+          };
+        } catch (e) {
+          const body = toolErrorBody(e);
+          console.error(`Tool ${tool.name} failed: ${body.error} - ${e.message}`);
+          return { isError: true, content: [{ type: "text", text: JSON.stringify(body, null, 2) }] };
+        }
       }
     );
   }
@@ -202,7 +239,7 @@ const httpServer = http.createServer(async (req, res) => {
   const { pathname } = new URL(req.url, `http://${req.headers.host}`);
  
   if (req.method === "GET" && pathname === "/health") {
-    return sendJson(res, 200, { status: "UP", service: "sap-mcp-demo" });
+    return sendJson(res, 200, { status: "UP", service: "sap-mcp-demo", dataSource: useS4 ? "s4" : "sample" });
   }
  
   if (pathname === "/mcp") {

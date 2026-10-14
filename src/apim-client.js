@@ -1,4 +1,4 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+code -r "C:\path\to\sap-mcp-server"import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
  
 // --- Get XSUAA token ---
