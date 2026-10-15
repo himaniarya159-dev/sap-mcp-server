@@ -3,6 +3,9 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import http from "node:http";
 import { s4Tools } from "./s4-tools.js";
+import xssec from "@sap/xssec";
+ 
+const { createSecurityContext, XsuaaService } = xssec;
  
 console.log("INDEX.JS STARTED (customers + sales orders)");
  
@@ -226,6 +229,43 @@ function createMcpServer() {
 }
  
 // ============================================================
+// AUTHENTICATION: the MCP server checks the XSUAA token itself
+// (SAP API Management checks it too, but the Cloud Foundry URL
+//  must not be a back door around the gateway)
+// ============================================================
+function xsuaaCredentials() {
+  try {
+    const services = JSON.parse(process.env.VCAP_SERVICES || "{}");
+    return services.xsuaa?.[0]?.credentials || null;
+  } catch {
+    return null;
+  }
+}
+ 
+const xsuaaCreds = xsuaaCredentials();
+const authService = xsuaaCreds ? new XsuaaService(xsuaaCreds) : null;
+const authRequired = process.env.NODE_ENV === "production";
+console.log(`Token check: ${authService ? "ON (XSUAA)" : authRequired ? "MISSING XSUAA BINDING - all /mcp calls are refused" : "off (local development)"}`);
+ 
+async function authenticate(req) {
+  if (!authService) {
+    // Locally (npm start) there is no XSUAA binding: allow, so development stays easy.
+    // On Cloud Foundry (NODE_ENV=production) a missing binding must never mean "open".
+    return authRequired
+      ? { ok: false, status: 503, error: "Server is not configured for authentication" }
+      : { ok: true, info: null };
+  }
+  try {
+    const ctx = await createSecurityContext(authService, { req });
+    const t = ctx.token;
+    return { ok: true, info: { token: t.jwt, clientId: t.clientId, scopes: t.scopes || [], extra: {} } };
+  } catch (e) {
+    console.warn(`Rejected /mcp call: ${e.message}`);
+    return { ok: false, status: 401, error: "Unauthorized: a valid XSUAA token is required" };
+  }
+}
+ 
+// ============================================================
 // HTTP SERVER
 // ============================================================
 function sendJson(res, status, body) {
@@ -243,6 +283,9 @@ const httpServer = http.createServer(async (req, res) => {
   }
  
   if (pathname === "/mcp") {
+    const auth = await authenticate(req);
+    if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
+    if (auth.info) req.auth = auth.info; // the MCP SDK passes this to every tool as extra.authInfo
     try {
       const server = createMcpServer();
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
