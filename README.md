@@ -1,5 +1,17 @@
 # SAP MCP Server on SAP BTP Cloud Foundry
 
+## Which version do I need?
+
+Each blog post has its own frozen version of the code. Pick the one that matches the post you are reading.
+
+| Blog post | What you build | Code |
+|---|---|---|
+| [Part 1: Connecting AI Agents with Enterprise APIs](https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/mcp-and-sap-integration-connecting-ai-agents-with-enterprise-apis/ba-p/14471218) | Concepts only, no code | - |
+| Part 2: MCP server secured with SAP API Management | MCP server on Cloud Foundry, SAP API Management, Cline (sample data) | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-2-apim) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-2-apim.zip) |
+| Part 3: Live SAP S/4HANA data | Same server, reading live S/4HANA data through a BTP destination | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-3-s4hana) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-3-s4hana.zip) |
+
+`main` always holds the latest version.
+
 A practical, end-to-end example of building a **Model Context Protocol (MCP) server** in Node.js, deploying it to **SAP BTP Cloud Foundry**, securing it with **SAP API Management** (Integration Suite), and asking it questions in **plain language** through the AI agent **Cline**.
 
 ```
@@ -13,9 +25,9 @@ SAP API Management ── VerifyAPIKey → VerifyJWT → Quota
 Node.js MCP Server (BTP Cloud Foundry, Streamable HTTP)
    ▼
 Tools: get_customer, find_customers, get_order_updates, list_orders
+   ▼
+Sample data (Part 2)  or  SAP S/4HANA via BTP destination (Part 3)
 ```
-
-📖 Blog post: _<https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/mcp-and-sap-integration-connecting-ai-agents-with-enterprise-apis/ba-p/14471218>_
 
 ---
 
@@ -26,7 +38,8 @@ sap-mcp-server/
 ├── .clinerules/
 │   └── sap-assistant.md            # Rules for Cline: use only MCP tools, answer in plain language
 ├── src/
-│   ├── index.js                    # MCP server (customers + sales orders)
+│   ├── index.js                    # MCP server (customers + sales orders, sample data)
+│   ├── s4-tools.js                 # Same tools reading live SAP S/4HANA via a BTP destination (Part 3)
 │   ├── test-client.js              # Local test client
 │   ├── apim-client.js              # MCP client calling the server through SAP API Management
 │   └── get-token.js                # Prints an XSUAA token as "Bearer <token>" (for Cline)
@@ -39,16 +52,19 @@ sap-mcp-server/
 
 ## Stages and versions
 
-The blog builds the project in stages. The **`main` branch contains the final version**. The first stage (local stdio server) is kept as a **Git tag**, so you can get that exact code as well.
+The blog series builds the project in stages. Each blog post has its own **Git tag**, so you always get exactly the code the post describes. `main` holds the latest version.
 
-| Stage | What you build | Where to get the code | Run |
+| Stage | What you build | Blog post | Code |
 |---|---|---|---|
-| 1 | Local MCP server over **stdio** | Tag **`v1-local-stdio`** | `node src/test-client.js` |
-| 2 | **HTTP** MCP server, tested locally | `main` | `npm start` + `node src/test-client.js` |
-| 3 | Deploy to SAP BTP Cloud Foundry | `main` | `cf push` |
-| 4 | Secure with SAP API Management + MCP client | `main` | `node --env-file=.env src/apim-client.js` |
-| 5a | Ask in plain language with **Cline**, local server | `main` | Cline → `sap-mcp-local` |
-| 5b | Same questions with **Cline through SAP API Management** | `main` | Cline → `sap-mcp-apim` |
+| 1 | Local MCP server over **stdio** | Part 2 | tag **`v1-local-stdio`** |
+| 2 | **HTTP** MCP server, tested locally | Part 2 | tag **`part-2-apim`** |
+| 3 | Deploy to SAP BTP Cloud Foundry | Part 2 | tag **`part-2-apim`** |
+| 4 | Secure with SAP API Management + MCP client | Part 2 | tag **`part-2-apim`** |
+| 5a | Ask in plain language with **Cline**, local server | Part 2 | tag **`part-2-apim`** |
+| 5b | Same questions with **Cline through SAP API Management** | Part 2 | tag **`part-2-apim`** |
+| 6 | **Live SAP S/4HANA data** through a BTP destination | Part 3 | tag **`part-3-s4hana`** |
+
+Switch to a version with `git checkout <tag>`, for example `git checkout part-2-apim`, then run `npm install`. Go back to the latest version with `git checkout main`.
 
 ---
 
@@ -59,6 +75,7 @@ The blog builds the project in stages. The **`main` branch contains the final ve
 - Cloud Foundry CLI
 - SAP Integration Suite with **API Management** activated (Stage 4)
 - VS Code with the **Cline** extension (Stage 5)
+- A free [SAP Business Accelerator Hub](https://api.sap.com) account (Stage 6)
 
 ```bash
 git clone https://github.com/himaniarya159-dev/sap-mcp-server.git
@@ -68,6 +85,8 @@ cd sap-mcp-server
 ---
 
 ## Scenario: customers and their sales orders
+
+Stages 1 to 5 use this sample data:
 
 | Customer | Orders |
 |---|---|
@@ -84,7 +103,7 @@ cd sap-mcp-server
 | `get_order_updates` | Customer, status, items, total, dated update history, expected delivery |
 | `list_orders` | Orders filtered by customer and/or status |
 
-The data is sample data. Each tool is defined once in a small registry in `src/index.js`, so adding a tool means adding one block.
+Each tool is defined once in a small registry in `src/index.js`, so adding a tool means adding one block. Stage 6 keeps the same tool names and reads live SAP S/4HANA data instead.
 
 ---
 
@@ -113,7 +132,7 @@ npm install
 
 ## Stage 2: HTTP MCP server (local)
 
-In the `main` version, `src/index.js` is an HTTP server using the Streamable HTTP transport.
+From here on, `src/index.js` is an HTTP server using the Streamable HTTP transport.
 
 Terminal 1:
 
@@ -143,6 +162,8 @@ cf push
 
 > **Trial note:** Cloud Foundry apps on a trial account are stopped every night. Run `cf start sap-mcp-server` if you get `404 Requested route does not exist`.
 
+> **Part 3 note:** on `main` and tag `part-3-s4hana`, `manifest.yml` binds the `mcp-destination` service. If you follow Part 2 only, use tag `part-2-apim`, or create that service first (Stage 6).
+
 ## Stage 4: Secure with SAP API Management
 
 1. **API proxy:** Integration Suite → Configure → APIs → Create, with the Cloud Foundry `/mcp` URL as the target.
@@ -153,7 +174,7 @@ cf push
 3. **Product and application:** Engage → Products (publish), then subscribe in the Developer Hub to get the API key.
 4. **XSUAA:** create an XSUAA instance and service key for the client credentials token.
 
-Create a file named `.env` in the project root. It's excluded from Git and Cloud Foundry. Use single quotes around the values:
+Create a file named `.env` in the project root. It's excluded from Git and Cloud Foundry. Use single quotes around the values, and keep each value on one line:
 
 ```
 APIM_URL='https://<your-apim-host>/<your-org>/sap-mcp'
@@ -298,6 +319,54 @@ Notes:
 
 ---
 
+## Stage 6: Live SAP S/4HANA data via a BTP destination (Part 3)
+
+Code for this stage: tag `part-3-s4hana`. Tools, Cline and SAP API Management stay the same. Only the data source changes.
+
+1. **Get a sandbox API key:** log on at [api.sap.com](https://api.sap.com), open *Sales Order (A2X)* and click **Show API Key**.
+2. **Create a BTP destination** (Connectivity → Destinations):
+
+   | Field | Value |
+   |---|---|
+   | Name | `S4HANA_SANDBOX` |
+   | URL | `https://sandbox.api.sap.com/s4hanacloud` |
+   | Proxy Type | Internet |
+   | Authentication | NoAuthentication |
+   | Additional property | `URL.headers.APIKey` = your sandbox key |
+
+   Click **Check Connection**. It should report that the HTTP request succeeded.
+
+3. **Create the Destination service and deploy:**
+
+   ```bash
+   cf create-service destination lite mcp-destination
+   npm install
+   cf push
+   ```
+
+   `manifest.yml` binds `mcp-destination` and sets `DATA_SOURCE: s4`.
+
+4. **Check:** `https://<your-app-route>/health` returns `"dataSource":"s4"`.
+5. **Ask Cline** (through `sap-mcp-apim`, as in Stage 5b):
+
+   | Question | Expected answer |
+   |---|---|
+   | Please give me all updates of order no 7 | Open, 50.70 USD, customer 17100001, `source: SAP S/4HANA (live)` |
+   | Show me order 14 | Completed, 70,200.00 USD, customer USCU-CUS01 |
+   | List open orders for customer USCU-CUS21 | A list of open orders (at most 20) |
+   | Give me updates of order 5 | Not found, no invented answer |
+
+Running `npm start` locally still uses the sample data, because `DATA_SOURCE` is only set in `manifest.yml`.
+
+Tool errors come back in a structured form, so the agent knows whether a retry makes sense:
+
+| Error | Retryable |
+|---|---|
+| `TEMPORARY_ERROR` (HTTP 429, 5xx, timeout) | yes |
+| `NOT_FOUND` (HTTP 404) | no |
+| `REQUEST_ERROR` (HTTP 400/401/403 or a bad request) | no |
+| `CONFIGURATION_ERROR` (destination not found) | no |
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -306,6 +375,7 @@ Notes:
 | Deployment error `Invalid Public Key Value … policy(VerifyJWT)` | Remove unused policies from **Created Policies**, not only from the flow |
 | Token request fails in PowerShell | Put the client secret in **single quotes**, because XSUAA secrets can contain `$` |
 | `.env: not found` | Create `.env` in the project root (not in `src`), saved as ASCII/UTF-8 |
+| `Failed to parse URL from undefined/oauth/token` | Run with `node --env-file=.env src/get-token.js` from the project root |
 | Quota allows a few extra calls | Distributed quota counters sync asynchronously, which is expected |
 | `listen EADDRINUSE :3000` | An old server is still running: `netstat -ano \| findstr :3000`, then `Stop-Process -Id <PID> -Force` |
 | Cline shows the server in red | Start `node src/index.js`, then click restart on the server in Cline's MCP view |
@@ -314,7 +384,12 @@ Notes:
 | Cline: `Headers.append … is an invalid header value` | The public key (`MIIB…`) was pasted as a header. Use the API key and `Bearer <token>` |
 | Cline: "Invalid JSON" after pasting the token | The token was copied from the terminal, where it wraps over several lines. Use `get-token.js \| Set-Clipboard` |
 | `sap-mcp-apim` red with 401 | Token expired or wrong API key: run `get-token.js` again |
+| Cline: `/register` or `ApplicationNotFound` error | The first call failed (usually a wrong or broken proxy URL), so Cline fell back to OAuth. Check the URL is on one line |
+| `Invalid ApiKey` | The key is not the application **Key**, or the application is not subscribed to the product with this proxy |
 | Token request failed: 401 | `XSUAA_URL`, client ID or secret in `.env` don't match your XSUAA service key |
+| Stage 6: `"dataSource":"sample"` | `DATA_SOURCE: s4` is missing in `manifest.yml`, push again |
+| Stage 6: `CONFIGURATION_ERROR` | `mcp-destination` is not bound, or the destination is not named `S4HANA_SANDBOX` |
+| Stage 6: `REQUEST_ERROR (HTTP 401)` | The sandbox API key in the destination (`URL.headers.APIKey`) is wrong |
 
 ---
 
@@ -322,10 +397,13 @@ Notes:
 
 - Never commit `.env`, service keys, API keys, or tokens.
 - `cline-mcp-settings.example.json` contains placeholders only. Your real Cline settings live in Cline's own settings file.
-- This demo uses sample data. Before connecting real SAP systems, also restrict direct access to the Cloud Foundry URL so that all traffic goes through API Management.
+- The sandbox API key lives only in the BTP destination, never in code.
+- **Known gap:** the Cloud Foundry URL of the app can still be called directly, skipping API Management. Part 4 closes this: the MCP server will check the XSUAA token itself. Until then, do not connect a real SAP system.
 
-## Next steps
+## Next steps (Part 4)
 
-- Replace the sample data with the SAP S/4HANA Business Partner and Sales Order APIs through the BTP Destination service
-- Connect the same MCP server to a **Joule agent** (Joule Studio → MCP Servers) through a BTP destination
-- OAuth for interactive AI clients
+- The MCP server validates the XSUAA token itself, so direct calls to the Cloud Foundry URL are rejected
+- `Orders.Read` and `Orders.Write` scopes, checked for every tool
+- A human-in-the-loop confirm step before any write
+- Read-back verification of the business outcome after a write
+- Connect the same MCP server to a **Joule agent** through a BTP destination
