@@ -224,14 +224,29 @@ function createMcpServer() {
       tool.name,
       { description: tool.description, inputSchema: tool.inputSchema },
       async (args, extra) => {
+        const started = Date.now();
+        // One audit line per tool call: who called what, when, and what happened
+        const audit = (decision, outcome) => console.log("AUDIT " + JSON.stringify({
+          time: new Date().toISOString(),
+          correlationId: extra?.authInfo?.extra?.correlationId ?? null,
+          client: extra?.authInfo?.clientId ?? "local",
+          tool: tool.name,
+          scope,
+          decision,
+          outcome,
+          ms: Date.now() - started
+        }));
+
         if (!hasScope(extra?.authInfo, scope)) {
           console.warn(`Tool ${tool.name} refused: client ${extra?.authInfo?.clientId} lacks scope ${scope}`);
+          audit("refused", "NOT_AUTHORIZED");
           const body = { error: "NOT_AUTHORIZED", retryable: false,
                          message: `This client is not allowed to run ${tool.name}. Required scope: ${scope}.` };
           return { isError: true, content: [{ type: "text", text: JSON.stringify(body, null, 2) }] };
         }
         try {
           const result = await tool.run(args, extra);
+          audit("allowed", result?.error ?? (result?.salesOrder && result?.verified ? `created ${result.salesOrder}` : "ok"));
           return {
             isError: Boolean(result && result.error),
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
@@ -239,6 +254,7 @@ function createMcpServer() {
         } catch (e) {
           const body = toolErrorBody(e);
           console.error(`Tool ${tool.name} failed: ${body.error} - ${e.message}`);
+          audit("allowed", body.error);
           return { isError: true, content: [{ type: "text", text: JSON.stringify(body, null, 2) }] };
         }
       }
@@ -277,7 +293,9 @@ async function authenticate(req) {
   try {
     const ctx = await createSecurityContext(authService, { req });
     const t = ctx.token;
-    return { ok: true, info: { token: t.jwt, clientId: t.clientId, scopes: t.scopes || [], extra: {} } };
+    // Correlation ID: set by SAP API Management (X-Correlation-ID), else the Cloud Foundry request ID
+    const correlationId = req.headers["x-correlation-id"] || req.headers["x-vcap-request-id"] || null;
+    return { ok: true, info: { token: t.jwt, clientId: t.clientId, scopes: t.scopes || [], extra: { correlationId } } };
   } catch (e) {
     console.warn(`Rejected /mcp call: ${e.message}`);
     return { ok: false, status: 401, error: "Unauthorized: a valid XSUAA token is required" };
