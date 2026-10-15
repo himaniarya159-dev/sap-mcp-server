@@ -1,12 +1,13 @@
 {
   "xsappname": "na-63002c5d-4a04-4213-a200-7e77598da7c3",
-  "tenant-mode": "dedicated",
+  "tenant-mode": "shared",
   "description": "SAP MCP server: who may run which tool",
   "scopes": [
     { "name": "$XSAPPNAME.Orders.Read", "description": "Read customers and sales orders" },
     { "name": "$XSAPPNAME.Orders.Write", "description": "Prepare and create sales orders" }
   ],
   "authorities": [
-    "$XSAPPNAME.Orders.Read"
+    "$XSAPPNAME.Orders.Read",
+    "$XSAPPNAME.Orders.Write"
   ]
 }

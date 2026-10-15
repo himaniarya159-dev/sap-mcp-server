@@ -82,6 +82,50 @@ export const pendingOrders = new Map(); // confirmationId -> { order, clientId, 
 const material = z.string().regex(/^[A-Za-z0-9_-]{1,40}$/, "Letters, digits, _ and - only")
   .describe("Material number, for example TG13");
 
+// WRITE_MODE=live -> real POST to S/4HANA (needs a real system).
+// Anything else -> simulated: the Business Accelerator Hub sandbox does not save new orders.
+const LIVE_WRITE = process.env.WRITE_MODE === "live";
+const simulatedOrders = new Map(); // simulated order number -> stored order
+let simulatedCounter = 0;
+
+class ToolInputError extends Error {}
+
+// Create the order, then READ IT BACK: the answer comes from what the system holds, not from "HTTP 201"
+async function createAndVerify(order) {
+  let number;
+  if (LIVE_WRITE) {
+    const res = await executeHttpRequest(DESTINATION, {
+      method: "POST",
+      url: `${SO_API}/A_SalesOrder`,
+      data: {
+        SalesOrderType: order.SalesOrderType,
+        SalesOrganization: order.SalesOrganization,
+        DistributionChannel: order.DistributionChannel,
+        OrganizationDivision: order.OrganizationDivision,
+        SoldToParty: order.SoldToParty,
+        to_Item: { results: [{ Material: order.Material, RequestedQuantity: String(order.RequestedQuantity) }] }
+      }
+    }); // the SAP Cloud SDK fetches the CSRF token for POST automatically
+    number = res.data.d.SalesOrder;
+    const check = await s4Get(`${SO_API}/A_SalesOrder('${number}')`, { $select: `${ORDER_FIELDS},to_Item`, $expand: "to_Item" });
+    return { ...toOrder(check), verified: true, mode: "live", source: SOURCE };
+  }
+  simulatedCounter += 1;
+  number = `SIM${String(simulatedCounter).padStart(7, "0")}`;
+  simulatedOrders.set(number, { ...order, SalesOrder: number, OverallSDProcessStatus: "A", createdAt: new Date().toISOString() });
+  const stored = simulatedOrders.get(number); // read back from the store, never from our own variables
+  return {
+    salesOrder: stored.SalesOrder,
+    customer: stored.SoldToParty,
+    material: stored.Material,
+    quantity: `${stored.RequestedQuantity} PC`,
+    status: PROCESS_STATUS[stored.OverallSDProcessStatus],
+    verified: true,
+    mode: "simulated - the SAP Business Accelerator Hub sandbox does not save new orders",
+    source: "MCP server (simulation)"
+  };
+}
+
 // ============================================================
 // TOOL REGISTRY (live SAP S/4HANA) - same tool names as the sample version
 // Each tool declares the scope it needs (index.js checks it). No scope = Orders.Read.
@@ -172,7 +216,7 @@ export const s4Tools = [
     scope: "Orders.Write",
     description: "Prepare a new SAP S/4HANA sales order. This does NOT create anything: it checks the customer " +
                  "and returns a preview plus a confirmationId. Always show the preview to the user and ask " +
-                 "for an explicit yes before the order is created.",
+                 "for an explicit yes. Only after that yes, call confirm_sales_order with the confirmationId.",
     inputSchema: {
       customerId,
       material,
@@ -197,6 +241,37 @@ export const s4Tools = [
         status: "PREPARED - nothing has been created in SAP S/4HANA yet",
         source: SOURCE
       };
+    }
+  },
+  {
+    name: "confirm_sales_order",
+    scope: "Orders.Write",
+    description: "Create a sales order that was prepared with prepare_sales_order. ONLY call this after the user " +
+                 "has seen the preview and explicitly said yes in this conversation. Calling it twice with the " +
+                 "same confirmationId never creates a second order.",
+    inputSchema: {
+      confirmationId: z.string().uuid().describe("The confirmationId returned by prepare_sales_order")
+    },
+    run: async (a, extra) => {
+      const p = pendingOrders.get(a.confirmationId);
+      const clientId = extra?.authInfo?.clientId ?? null;
+      if (!p) {
+        return { error: "INVALID_CONFIRMATION", retryable: false,
+                 message: "Unknown confirmationId. Prepare the order again with prepare_sales_order." };
+      }
+      if (p.clientId !== clientId) {
+        return { error: "INVALID_CONFIRMATION", retryable: false,
+                 message: "This confirmation belongs to a different client." };
+      }
+      // Idempotent: a repeated confirm returns the first result and creates nothing new
+      if (p.result) return { ...p.result, note: "Already created earlier. No second order was created." };
+      if (Date.now() > p.expiresAt) {
+        pendingOrders.delete(a.confirmationId);
+        return { error: "CONFIRMATION_EXPIRED", retryable: false,
+                 message: `The preview expired after ${PREPARE_TTL_MINUTES} minutes. Prepare the order again.` };
+      }
+      p.result = await createAndVerify(p.order);
+      return p.result;
     }
   }
 ];
