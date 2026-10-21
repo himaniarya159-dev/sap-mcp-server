@@ -7,8 +7,9 @@ Each blog post has its own frozen version of the code. Pick the one that matches
 | Blog post | What you build | Code |
 |---|---|---|
 | [Part 1: Connecting AI Agents with Enterprise APIs](https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/mcp-and-sap-integration-connecting-ai-agents-with-enterprise-apis/ba-p/14471218) | Concepts only, no code | - |
-| Part 2: MCP server secured with SAP API Management | MCP server on Cloud Foundry, SAP API Management, Cline (sample data) | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-2-apim) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-2-apim.zip) |
-| Part 3: Live SAP S/4HANA data | Same server, reading live S/4HANA data through a BTP destination | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-3-s4hana) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-3-s4hana.zip) |
+| [Part 2: From Concept to Practice](https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/mcp-and-sap-integration-from-concept-to-practice-part-2/ba-p/14499849) | MCP server on Cloud Foundry, SAP API Management, Cline (sample data) | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-2-apim) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-2-apim.zip) |
+| [Part 3: Live S/4HANA Data and Who Gets to Act](https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/mcp-and-sap-integration-part-3-live-s-4hana-data-and-who-gets-to-act/ba-p/14504121) | Same server, reading live S/4HANA data through a BTP destination | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-3-s4hana) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-3-s4hana.zip) |
+| Part 4: Execution authority (coming soon) | Token check in the server, read/write scopes, preview and confirm, read-back, audit log | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-4-execution-authority) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-4-execution-authority.zip) |
 
 `main` always holds the latest version.
 
@@ -20,14 +21,18 @@ You (plain language)
 Cline (AI agent in VS Code)  or  MCP client
    │  X-API-Key + Authorization: Bearer <XSUAA JWT>
    ▼
-SAP API Management ── VerifyAPIKey → VerifyJWT → Quota
+SAP API Management ── AssignMessage → VerifyAPIKey → VerifyJWT → Quota
    ▼
 Node.js MCP Server (BTP Cloud Foundry, Streamable HTTP)
+   │  Part 4: validates the XSUAA token, checks the scope per tool, writes an audit log
    ▼
-Tools: get_customer, find_customers, get_order_updates, list_orders
+Read tools  (Orders.Read):  get_customer, find_customers, get_order_updates, list_orders
+Write tools (Orders.Write): prepare_sales_order → confirm_sales_order (Part 4)
    ▼
-Sample data (Part 2)  or  SAP S/4HANA via BTP destination (Part 3)
+Sample data (Part 2)  or  SAP S/4HANA via BTP destination (Part 3, 4)
 ```
+
+![Request flow through SAP API Management](docs/images/apim-request-flow.png)
 
 ---
 
@@ -36,15 +41,20 @@ Sample data (Part 2)  or  SAP S/4HANA via BTP destination (Part 3)
 ```
 sap-mcp-server/
 ├── .clinerules/
-│   └── sap-assistant.md            # Rules for Cline: use only MCP tools, answer in plain language
+│   └── sap-assistant.md            # Rules for Cline: use only MCP tools, answer in plain language, never confirm without a "yes"
+├── apim/
+│   └── AssignCorrelationId.xml     # API Management policy that adds X-Correlation-ID (Part 4)
+├── docs/images/
+│   └── apim-request-flow.png       # Request flow diagram
 ├── src/
-│   ├── index.js                    # MCP server (customers + sales orders, sample data)
-│   ├── s4-tools.js                 # Same tools reading live SAP S/4HANA via a BTP destination (Part 3)
+│   ├── index.js                    # MCP server: token check, scope check per tool, audit log, sample data
+│   ├── s4-tools.js                 # Tools for live SAP S/4HANA via a BTP destination (Part 3) + write tools (Part 4)
 │   ├── test-client.js              # Local test client
 │   ├── apim-client.js              # MCP client calling the server through SAP API Management
 │   └── get-token.js                # Prints an XSUAA token as "Bearer <token>" (for Cline)
 ├── cline-mcp-settings.example.json # Example Cline MCP settings (no real keys)
 ├── manifest.yml                    # Cloud Foundry deployment descriptor
+├── xs-security.json                # XSUAA scopes Orders.Read and Orders.Write (Part 4)
 ├── .gitignore
 ├── .cfignore
 └── package.json
@@ -63,6 +73,7 @@ The blog series builds the project in stages. Each blog post has its own **Git t
 | 5a | Ask in plain language with **Cline**, local server | Part 2 | tag **`part-2-apim`** |
 | 5b | Same questions with **Cline through SAP API Management** | Part 2 | tag **`part-2-apim`** |
 | 6 | **Live SAP S/4HANA data** through a BTP destination | Part 3 | tag **`part-3-s4hana`** |
+| 7 | **Execution authority:** token and scope checks, preview and confirm, read-back, audit log | Part 4 | tag **`part-4-execution-authority`** |
 
 Switch to a version with `git checkout <tag>`, for example `git checkout part-2-apim`, then run `npm install`. Go back to the latest version with `git checkout main`.
 
@@ -367,6 +378,114 @@ Tool errors come back in a structured form, so the agent knows whether a retry m
 | `REQUEST_ERROR` (HTTP 400/401/403 or a bad request) | no |
 | `CONFIGURATION_ERROR` (destination not found) | no |
 
+---
+
+## Stage 7: Execution authority (Part 4)
+
+Code for this stage: tag `part-4-execution-authority`. Part 3 showed that an agent *can* reach SAP. This stage decides what it is *allowed* to do, and proves what actually happened.
+
+| Question | Answer in this stage |
+|---|---|
+| Who may call the server? | The server validates the XSUAA token itself. Calls to the Cloud Foundry URL without a valid token get `401`. |
+| Who may run which tool? | Every tool declares a scope. Read tools need `Orders.Read`, write tools need `Orders.Write`. Missing scope → `NOT_AUTHORIZED`. |
+| Who approves a write? | A human. `prepare_sales_order` only shows a preview. The order is created only after the user says "yes" and `confirm_sales_order` runs. |
+| What if the agent retries? | `confirm_sales_order` is idempotent: confirming the same order twice never creates a second order. |
+| What confirms the business outcome? | After creating the order, the server reads it back and returns what the system holds, with `verified: true`. |
+| Can we trace it later? | Every tool call writes an `AUDIT` log line with time, correlation ID, client, tool, scope, decision and outcome. |
+
+### 7.1 Scopes in XSUAA
+
+`xs-security.json` defines two scopes. `authorities` decides which scopes the client-credentials token gets:
+
+```json
+{
+  "xsappname": "<your-xsappname>",
+  "tenant-mode": "shared",
+  "scopes": [
+    { "name": "$XSAPPNAME.Orders.Read",  "description": "Read customers and sales orders" },
+    { "name": "$XSAPPNAME.Orders.Write", "description": "Prepare and create sales orders" }
+  ],
+  "authorities": [ "$XSAPPNAME.Orders.Read", "$XSAPPNAME.Orders.Write" ]
+}
+```
+
+To see a refusal first, start with only `Orders.Read` in `authorities`, then add `Orders.Write` later. Apply the file to the XSUAA instance, which is bound to the app in `manifest.yml`:
+
+```bash
+cf update-service mcp-xsuaa -c xs-security.json
+cf push
+```
+
+Then get a **new** token (`get-token.js`), because scopes are written into the token when it is issued. Check which scopes the token holds:
+
+```powershell
+$token = (node --env-file=.env src\get-token.js | Select-Object -First 1)
+$p = $token.Split('.')[1].Replace('-','+').Replace('_','/'); while ($p.Length % 4) { $p += '=' }
+([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($p)) | ConvertFrom-Json).scope
+```
+
+### 7.2 Token check in the server
+
+On Cloud Foundry (`NODE_ENV=production`) every request to `/mcp` needs a valid XSUAA token. The server validates it with `@sap/xssec`, so even a direct call to the Cloud Foundry URL, which skips API Management, is rejected:
+
+```powershell
+# Without a token -> 401
+curl.exe -i -X POST "https://<your-app-route>/mcp" -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}'
+
+# With a token -> 200
+curl.exe -s -o NUL -w "%{http_code}" -X POST "https://<your-app-route>/mcp" -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "Authorization: $token" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}'
+```
+
+The log shows `Token check: ON (XSUAA)` after the app starts.
+
+### 7.3 Preview, confirm and read-back
+
+Ask Cline: *Create a sales order for customer 17100001: 3 pieces of material TG13.*
+
+1. Cline calls `prepare_sales_order`. Nothing is created. The answer is a preview (customer, material, quantity, sales area 1710/10/00) and a confirmation ID that expires after 5 minutes.
+2. You reply **yes**. Cline calls `confirm_sales_order` with the confirmation ID.
+3. The server creates the order, **reads it back** and returns what the system holds:
+
+```json
+{ "salesOrder": "SIM0000001", "customer": "17100001", "material": "TG13", "quantity": "3 PC", "status": "Open", "verified": true, "mode": "simulated - the SAP Business Accelerator Hub sandbox does not save new orders" }
+```
+
+4. Ask *Please confirm that order again*. The same confirmation ID returns the same order with the note *Already created earlier. No second order was created.*
+
+**Simulated vs. live:** the SAP Business Accelerator Hub sandbox does not save new orders, so by default the server simulates the save (numbers `SIM0000001`, `SIM0000002`, …) and reads back from its own store. With a real S/4HANA system, set `WRITE_MODE: live` in `manifest.yml`. The server then POSTs to `A_SalesOrder` and reads the order back from SAP.
+
+`.clinerules/sap-assistant.md` tells Cline to always prepare first, never confirm without the user's "yes", and to report whether the result is verified and simulated. Keep **Auto-approve** for MCP tools turned off in Cline.
+
+### 7.4 Refusal without the Write scope
+
+With only `Orders.Read` in the token, `prepare_sales_order` returns:
+
+```json
+{ "error": "NOT_AUTHORIZED", "retryable": false, "message": "This client is not allowed to run prepare_sales_order. Required scope: Orders.Write." }
+```
+
+The agent sees that a retry makes no sense and explains the refusal instead.
+
+### 7.5 Audit log and correlation ID
+
+```powershell
+cf logs sap-mcp-server | Select-String "AUDIT"
+```
+
+```
+AUDIT {"time":"…","correlationId":"…","client":"sb-na-…","tool":"confirm_sales_order","scope":"Orders.Write","decision":"allowed","outcome":"created SIM0000001","ms":11}
+```
+
+Add the policy in [`apim/AssignCorrelationId.xml`](apim/AssignCorrelationId.xml) as the **first** policy in ProxyEndpoint → PreFlow. It sets `X-Correlation-ID` to the API Management message ID, so one ID links the API Management Debug view and the server's AUDIT line.
+
+### Known limits of this stage
+
+- **Per application, not per user:** client-credentials tokens carry the scopes of the application. Per-user rights need a user token (for example with principal propagation).
+- **Simulated writes:** the sandbox can't save orders.
+- **In-memory state:** pending confirmations and simulated orders are lost when the app restarts.
+- **Human approval relies on the client:** the server enforces preview → confirm, but the "yes" is collected by the agent.
+- **Direct calls with a valid token** still reach the Cloud Foundry URL without the API key and quota. Route production traffic only through API Management.
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -390,6 +509,11 @@ Tool errors come back in a structured form, so the agent knows whether a retry m
 | Stage 6: `"dataSource":"sample"` | `DATA_SOURCE: s4` is missing in `manifest.yml`, push again |
 | Stage 6: `CONFIGURATION_ERROR` | `mcp-destination` is not bound, or the destination is not named `S4HANA_SANDBOX` |
 | Stage 6: `REQUEST_ERROR (HTTP 401)` | The sandbox API key in the destination (`URL.headers.APIKey`) is wrong |
+| Stage 7: `Cannot change tenant mode … from shared to dedicated` | Keep `"tenant-mode": "shared"` in `xs-security.json` |
+| Stage 7: `NOT_AUTHORIZED` after adding `Orders.Write` | The old token is still in use. Run `get-token.js` again and update the `Authorization` header in Cline |
+| Stage 7: `401 Unauthorized: a valid XSUAA token is required` | The token is missing or expired, or it was issued by another XSUAA instance |
+| Stage 7: Cline still shows 4 tools | `cf push`, restart the server in Cline's MCP view and start a new task |
+| `cf push` fails with `token expired` | `cf logout`, then `cf login --sso` |
 
 ---
 
@@ -398,12 +522,12 @@ Tool errors come back in a structured form, so the agent knows whether a retry m
 - Never commit `.env`, service keys, API keys, or tokens.
 - `cline-mcp-settings.example.json` contains placeholders only. Your real Cline settings live in Cline's own settings file.
 - The sandbox API key lives only in the BTP destination, never in code.
-- **Known gap:** the Cloud Foundry URL of the app can still be called directly, skipping API Management. Part 4 closes this: the MCP server will check the XSUAA token itself. Until then, do not connect a real SAP system.
+- From Stage 7, the MCP server validates the XSUAA token itself, so calls to the Cloud Foundry URL without a token are rejected. A caller with a valid token can still skip the API key and quota, so route production traffic only through API Management.
+- Writes are simulated by default. Use `WRITE_MODE: live` only with a test system you're allowed to change.
 
-## Next steps (Part 4)
+## Next steps
 
-- The MCP server validates the XSUAA token itself, so direct calls to the Cloud Foundry URL are rejected
-- `Orders.Read` and `Orders.Write` scopes, checked for every tool
-- A human-in-the-loop confirm step before any write
-- Read-back verification of the business outcome after a write
+- User tokens instead of client credentials, so scopes follow the person, not the application
+- Persistent storage for pending confirmations and the audit log
+- Measure the token cost of each scenario (read, preview, confirm)
 - Connect the same MCP server to a **Joule agent** through a BTP destination
