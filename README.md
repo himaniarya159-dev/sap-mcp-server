@@ -7,8 +7,8 @@ Each blog post has its own frozen version of the code. Pick the one that matches
 | Blog post | What you build | Code |
 |---|---|---|
 | [Part 1: Connecting AI Agents with Enterprise APIs](https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/mcp-and-sap-integration-connecting-ai-agents-with-enterprise-apis/ba-p/14471218) | Concepts only, no code | - |
-| Part 2: MCP server secured with SAP API Management | MCP server on Cloud Foundry, SAP API Management, Cline (sample data) | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-2-apim) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-2-apim.zip) |
-| Part 3: Live SAP S/4HANA data | Same server, reading live S/4HANA data through a BTP destination | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-3-s4hana) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-3-s4hana.zip) |
+| [Part 2: From Concept to Practice](https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/mcp-and-sap-integration-from-concept-to-practice-part-2/ba-p/14499849) | MCP server on Cloud Foundry, SAP API Management, Cline (sample data) | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-2-apim) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-2-apim.zip) |
+|[Part 3: Live S/4HANA Data and Who Gets to Act](https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/mcp-and-sap-integration-part-3-live-s-4hana-data-and-who-gets-to-act/ba-p/14504121) | Same server, reading live S/4HANA data through a BTP destination | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-3-s4hana) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-3-s4hana.zip) |
 
 `main` always holds the latest version.
 
