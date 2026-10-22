@@ -9,7 +9,7 @@ Each blog post has its own frozen version of the code. Pick the one that matches
 | [Part 1: Connecting AI Agents with Enterprise APIs](https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/mcp-and-sap-integration-connecting-ai-agents-with-enterprise-apis/ba-p/14471218) | Concepts only, no code | - |
 | [Part 2: From Concept to Practice](https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/mcp-and-sap-integration-from-concept-to-practice-part-2/ba-p/14499849) | MCP server on Cloud Foundry, SAP API Management, Cline (sample data) | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-2-apim) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-2-apim.zip) |
 | [Part 3: Live S/4HANA Data and Who Gets to Act](https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/mcp-and-sap-integration-part-3-live-s-4hana-data-and-who-gets-to-act/ba-p/14504121) | Same server, reading live S/4HANA data through a BTP destination | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-3-s4hana) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-3-s4hana.zip) |
-| Part 4: Who Gets to Act? | Token check in the server, read/write scopes, preview and confirm, read-back, audit log | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-4-execution-authority) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-4-execution-authority.zip) |
+| [Part 4: Who Gets to Act?](https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/mcp-and-sap-integration-part-4-who-gets-to-act/ba-p/14504881) | Token check in the server, read/write scopes, preview and confirm, read-back, audit log | [Browse](https://github.com/himaniarya159-dev/sap-mcp-server/tree/part-4-execution-authority) · [Download ZIP](https://github.com/himaniarya159-dev/sap-mcp-server/archive/refs/tags/part-4-execution-authority.zip) |
 
 `main` always holds the latest version.
 
@@ -73,7 +73,7 @@ The blog series builds the project in stages. Each blog post has its own **Git t
 | 5a | Ask in plain language with **Cline**, local server | Part 2 | tag **`part-2-apim`** |
 | 5b | Same questions with **Cline through SAP API Management** | Part 2 | tag **`part-2-apim`** |
 | 6 | **Live SAP S/4HANA data** through a BTP destination | Part 3 | tag **`part-3-s4hana`** |
-| 7 | **Execution authority:** token and scope checks, preview and confirm, read-back, audit log | Part 4 | tag **`part-4-execution-authority`** |
+| 7 | **Who gets to act:** token and scope checks, preview and confirm, read-back, audit log | Part 4 | tag **`part-4-execution-authority`** |
 
 Switch to a version with `git checkout <tag>`, for example `git checkout part-2-apim`, then run `npm install`. Go back to the latest version with `git checkout main`.
 
