@@ -10,7 +10,9 @@ applications:
     health-check-http-endpoint: /health
     services:
       - mcp-destination
+      - mcp-xsuaa
     env:
       NODE_ENV: production
       DATA_SOURCE: s4
       S4_DESTINATION: S4HANA_SANDBOX
+    

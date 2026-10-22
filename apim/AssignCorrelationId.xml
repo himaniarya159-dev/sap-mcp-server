@@ -1,0 +1,10 @@
+<!-- Add as the FIRST step in ProxyEndpoint > PreFlow of the MCP API proxy -->
+<AssignMessage async="false" continueOnError="false" enabled="true" xmlns="http://www.sap.com/apimgmt">
+  <Add>
+    <Headers>
+      <Header name="X-Correlation-ID">{messageid}</Header>
+    </Headers>
+  </Add>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <AssignTo createNew="false" type="request"/>
+</AssignMessage>

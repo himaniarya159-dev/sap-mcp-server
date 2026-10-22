@@ -3,9 +3,12 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import http from "node:http";
 import { s4Tools } from "./s4-tools.js";
- 
+import xssec from "@sap/xssec";
+
+const { createSecurityContext, XsuaaService } = xssec;
+
 console.log("INDEX.JS STARTED (customers + sales orders)");
- 
+
 // ============================================================
 // SAMPLE DATA: customers and their sales orders
 // Used when DATA_SOURCE is not "s4" (for example when running locally).
@@ -18,7 +21,7 @@ const customers = {
   "1004": { customerId: "1004", name: "Sunrise Foods Ltd",   country: "India",         city: "Pune" },
   "1005": { customerId: "1005", name: "Northern Energy Inc", country: "Canada",        city: "Edmonton" }
 };
- 
+
 const orders = {
   "1101": {
     orderId: "1101", customerId: "1001", orderDate: "2026-09-15",
@@ -92,7 +95,7 @@ const orders = {
     expectedDelivery: "2026-10-20"
   }
 };
- 
+
 // ============================================================
 // BUSINESS LOGIC (sample data)
 // ============================================================
@@ -100,35 +103,35 @@ function orderSummary(o) {
   return { orderId: o.orderId, orderDate: o.orderDate, status: o.status,
            totalAmount: o.totalAmount, expectedDelivery: o.expectedDelivery };
 }
- 
+
 function getCustomer(customerId) {
   const customer = customers[customerId];
   if (!customer) return null;
   const customerOrders = Object.values(orders).filter(o => o.customerId === customerId).map(orderSummary);
   return { ...customer, orders: customerOrders };
 }
- 
+
 function findCustomers(name, country) {
   let result = Object.values(customers);
   if (name)    result = result.filter(c => c.name.toLowerCase().includes(name.toLowerCase()));
   if (country) result = result.filter(c => c.country.toLowerCase() === country.toLowerCase());
   return result;
 }
- 
+
 function getOrderUpdates(orderId) {
   const order = orders[orderId];
   if (!order) return null;
   const { orders: _ignored, ...customer } = getCustomer(order.customerId);
   return { ...order, customer };
 }
- 
+
 function listOrders(customerId, status) {
   let result = Object.values(orders);
   if (customerId) result = result.filter(o => o.customerId === customerId);
   if (status)     result = result.filter(o => o.status.toLowerCase() === status.toLowerCase());
   return result.map(o => ({ ...orderSummary(o), customerId: o.customerId, customerName: customers[o.customerId].name }));
 }
- 
+
 // ============================================================
 // TOOL REGISTRY (sample data): each tool defined once, registered on the MCP server below
 // ============================================================
@@ -167,7 +170,7 @@ const sampleTools = [
     run: a => listOrders(a.customerId, a.status)
   }
 ];
- 
+
 // ============================================================
 // DATA SOURCE: DATA_SOURCE=s4 -> live SAP S/4HANA via BTP destination,
 // otherwise the sample data above. Tool names stay the same either way.
@@ -175,7 +178,7 @@ const sampleTools = [
 const useS4 = process.env.DATA_SOURCE === "s4";
 const tools = useS4 ? s4Tools : sampleTools;
 console.log(`Data source: ${useS4 ? "SAP S/4HANA (BTP destination)" : "sample data"}`);
- 
+
 // ============================================================
 // MCP SERVER
 // ============================================================
@@ -199,17 +202,51 @@ function toolErrorBody(e) {
   return { error: "REQUEST_ERROR", retryable: false,
            message: `The SAP S/4HANA request could not be processed${status ? ` (HTTP ${status})` : ""}.` };
 }
- 
+
+// ============================================================
+// AUTHORIZATION: which tool may this caller run?
+// API Management sees WHO is calling. Only the MCP server sees WHICH tool,
+// so the scope check per tool lives here. Every tool declares its scope;
+// a tool without one counts as a read tool.
+// ============================================================
+function hasScope(authInfo, scope) {
+  if (!authService) return true; // local development without XSUAA: no scopes to check
+  const scopes = authInfo?.scopes || [];
+  return scopes.some(s => s.endsWith("." + scope)); // XSUAA scopes look like "<xsappname>.Orders.Read"
+}
+
 function createMcpServer() {
-  const server = new McpServer({ name: "sap-mcp-demo", version: "1.3.0" });
- 
+  const server = new McpServer({ name: "sap-mcp-demo", version: "1.4.0" });
+
   for (const tool of tools) {
+    const scope = tool.scope || "Orders.Read";
     server.registerTool(
       tool.name,
       { description: tool.description, inputSchema: tool.inputSchema },
-      async args => {
+      async (args, extra) => {
+        const started = Date.now();
+        // One audit line per tool call: who called what, when, and what happened
+        const audit = (decision, outcome) => console.log("AUDIT " + JSON.stringify({
+          time: new Date().toISOString(),
+          correlationId: extra?.authInfo?.extra?.correlationId ?? null,
+          client: extra?.authInfo?.clientId ?? "local",
+          tool: tool.name,
+          scope,
+          decision,
+          outcome,
+          ms: Date.now() - started
+        }));
+
+        if (!hasScope(extra?.authInfo, scope)) {
+          console.warn(`Tool ${tool.name} refused: client ${extra?.authInfo?.clientId} lacks scope ${scope}`);
+          audit("refused", "NOT_AUTHORIZED");
+          const body = { error: "NOT_AUTHORIZED", retryable: false,
+                         message: `This client is not allowed to run ${tool.name}. Required scope: ${scope}.` };
+          return { isError: true, content: [{ type: "text", text: JSON.stringify(body, null, 2) }] };
+        }
         try {
-          const result = await tool.run(args);
+          const result = await tool.run(args, extra);
+          audit("allowed", result?.error ?? (result?.salesOrder && result?.verified ? `created ${result.salesOrder}` : "ok"));
           return {
             isError: Boolean(result && result.error),
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
@@ -217,6 +254,7 @@ function createMcpServer() {
         } catch (e) {
           const body = toolErrorBody(e);
           console.error(`Tool ${tool.name} failed: ${body.error} - ${e.message}`);
+          audit("allowed", body.error);
           return { isError: true, content: [{ type: "text", text: JSON.stringify(body, null, 2) }] };
         }
       }
@@ -224,7 +262,46 @@ function createMcpServer() {
   }
   return server;
 }
- 
+
+// ============================================================
+// AUTHENTICATION: the MCP server checks the XSUAA token itself
+// (SAP API Management checks it too, but the Cloud Foundry URL
+//  must not be a back door around the gateway)
+// ============================================================
+function xsuaaCredentials() {
+  try {
+    const services = JSON.parse(process.env.VCAP_SERVICES || "{}");
+    return services.xsuaa?.[0]?.credentials || null;
+  } catch {
+    return null;
+  }
+}
+
+const xsuaaCreds = xsuaaCredentials();
+const authService = xsuaaCreds ? new XsuaaService(xsuaaCreds) : null;
+const authRequired = process.env.NODE_ENV === "production";
+console.log(`Token check: ${authService ? "ON (XSUAA)" : authRequired ? "MISSING XSUAA BINDING - all /mcp calls are refused" : "off (local development)"}`);
+
+async function authenticate(req) {
+  if (!authService) {
+    // Locally (npm start) there is no XSUAA binding: allow, so development stays easy.
+    // On Cloud Foundry (NODE_ENV=production) a missing binding must never mean "open".
+    return authRequired
+      ? { ok: false, status: 503, error: "Server is not configured for authentication" }
+      : { ok: true, info: null };
+  }
+  try {
+    const ctx = await createSecurityContext(authService, { req });
+    const t = ctx.token;
+    // Correlation ID: set by SAP API Management (X-Correlation-ID), else the Cloud Foundry request ID
+    const correlationId = req.headers["x-correlation-id"] || req.headers["x-vcap-request-id"] || null;
+    return { ok: true, info: { token: t.jwt, clientId: t.clientId, scopes: t.scopes || [], extra: { correlationId } } };
+  } catch (e) {
+    console.warn(`Rejected /mcp call: ${e.message}`);
+    return { ok: false, status: 401, error: "Unauthorized: a valid XSUAA token is required" };
+  }
+}
+
 // ============================================================
 // HTTP SERVER
 // ============================================================
@@ -232,17 +309,20 @@ function sendJson(res, status, body) {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(body));
 }
- 
+
 const port = process.env.PORT || 3000;
- 
+
 const httpServer = http.createServer(async (req, res) => {
   const { pathname } = new URL(req.url, `http://${req.headers.host}`);
- 
+
   if (req.method === "GET" && pathname === "/health") {
     return sendJson(res, 200, { status: "UP", service: "sap-mcp-demo", dataSource: useS4 ? "s4" : "sample" });
   }
- 
+
   if (pathname === "/mcp") {
+    const auth = await authenticate(req);
+    if (!auth.ok) return sendJson(res, auth.status, { error: auth.error });
+    if (auth.info) req.auth = auth.info; // the MCP SDK passes this to every tool as extra.authInfo
     try {
       const server = createMcpServer();
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
@@ -255,10 +335,10 @@ const httpServer = http.createServer(async (req, res) => {
     }
     return;
   }
- 
+
   sendJson(res, 404, { error: "Not Found" });
 });
- 
+
 httpServer.on("error", err => {
   if (err.code === "EADDRINUSE") {
     console.error(`Port ${port} is already in use. Stop the old server (Ctrl + C) or run:`);
@@ -267,11 +347,10 @@ httpServer.on("error", err => {
   }
   throw err;
 });
- 
+
 httpServer.listen(port, "0.0.0.0", () => {
   console.log(`SAP MCP Server listening on port ${port}`);
   console.log(`Health: http://localhost:${port}/health`);
   console.log(`MCP:    http://localhost:${port}/mcp`);
   console.log(`Tools:  ${tools.map(t => t.name).join(", ")}`);
 });
- 
